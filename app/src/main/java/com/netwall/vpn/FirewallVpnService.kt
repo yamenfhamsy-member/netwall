@@ -17,7 +17,6 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.netwall.R
-import com.netwall.data.AppInventory
 import com.netwall.data.RulesStore
 import com.netwall.ui.MainActivity
 import kotlinx.coroutines.runBlocking
@@ -72,6 +71,7 @@ class FirewallVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            EventLog.log("STOP", "user/system stop")
             teardown()
             stopSelf()
             return Service.START_NOT_STICKY
@@ -90,11 +90,13 @@ class FirewallVpnService : VpnService() {
             return Service.START_NOT_STICKY
         }
         registerNetworkCallbackOnce()
+        EventLog.log("START", "tunnel restart requested")
         restartTunnel()
         return Service.START_STICKY
     }
 
     override fun onRevoke() {
+        EventLog.log("REVOKE", "slot taken by another VPN")
         teardown()
         stopSelf()
         super.onRevoke()
@@ -217,6 +219,7 @@ class FirewallVpnService : VpnService() {
         // Skip capability noise: rebuild only when the transport actually
         // changed or no tunnel is currently up.
         if (tunnelAlive() && currentNetType() == lastAppliedNetType) return
+        EventLog.log("REBUILD", "net=${currentNetType()}")
         restartTunnel()
     }
 
@@ -290,12 +293,10 @@ class FirewallVpnService : VpnService() {
                 return
             }
 
-            val installed = try {
-                runBlocking {
-                    AppInventory(applicationContext).load().map { it.packageName }.toSet()
-                }
-            } catch (_: Exception) {
-                emptySet()
+            val installed = PackageCache.packages.ifEmpty {
+                // First run after boot/install: names-only scan (fast, no icons).
+                PackageCache.refresh(applicationContext)
+                PackageCache.packages
             }
 
             val netType = currentNetType()
@@ -365,6 +366,7 @@ class FirewallVpnService : VpnService() {
                 }
                 consecutiveFailures = 0
                 lastAppliedNetType = netType
+                EventLog.log("ESTABLISH", "ok net=$netType bypass=${bypass.size}")
                 synchronized(guard) { tun = fd }
                 running = true
                 sinkLoop(fd)
@@ -375,6 +377,7 @@ class FirewallVpnService : VpnService() {
             // instead of hammering the system.
             attempt++
             consecutiveFailures++
+            EventLog.log("FAIL", "attempt=$attempt")
             if (attempt >= 3) break
             try {
                 Thread.sleep(if (attempt == 1) 5_000 else 15_000)
@@ -390,6 +393,7 @@ class FirewallVpnService : VpnService() {
         } catch (_: Exception) {
         }
         fatalShutdown = true
+        EventLog.log("AUTOOFF", "master disabled after 3 failures")
         postAutoOff()
         stopSelf()
     }

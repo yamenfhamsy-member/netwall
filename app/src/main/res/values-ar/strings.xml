@@ -34,4 +34,14 @@
     <string name="notif_autooff_text">تعذر الاحتفاظ بخانة الـ VPN بعد عدة محاولات. اضغط لإعادة الفتح والمحاولة.</string>
     <string name="notif_boot_title">اضغط لاستئناف الحماية</string>
     <string name="notif_boot_text">تعذر التشغيل التلقائي. افتح التطبيق للمتابعة.</string>
+    <string name="loading_apps">جارٍ كشف التطبيقات…</string>
+    <string name="loading_found">تم العثور على %1$d تطبيقاً</string>
+    <string name="loading_failed">تعذر تحميل قائمة التطبيقات.</string>
+    <string name="loading_retry">إعادة المحاولة</string>
+    <string name="diag_show">سجل التشخيص</string>
+    <string name="diag_title">التشخيص</string>
+    <string name="diag_back">رجوع</string>
+    <string name="diag_refresh">تحديث</string>
+    <string name="diag_share">مشاركة</string>
+    <string name="diag_empty">لا توجد أحداث بعد. تظهر الأحداث هنا عند بدء الحماية أو إعادة بنائها أو إيقافها.</string>
 </resources>

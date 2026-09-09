@@ -34,4 +34,14 @@
     <string name="notif_autooff_text">Could not hold the VPN slot after several tries. Tap to reopen and retry.</string>
     <string name="notif_boot_title">Tap to resume protection</string>
     <string name="notif_boot_text">NetWall could not auto-start. Open the app to resume.</string>
+    <string name="loading_apps">Finding installed apps…</string>
+    <string name="loading_found">Found %1$d apps</string>
+    <string name="loading_failed">Could not load the app list.</string>
+    <string name="loading_retry">Retry</string>
+    <string name="diag_show">Diagnostics log</string>
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_back">Back</string>
+    <string name="diag_refresh">Refresh</string>
+    <string name="diag_share">Share</string>
+    <string name="diag_empty">No events yet. Events appear here when protection starts, rebuilds, or stops.</string>
 </resources>

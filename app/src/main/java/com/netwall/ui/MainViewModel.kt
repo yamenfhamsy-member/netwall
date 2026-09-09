@@ -29,6 +29,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
+    /** Live number of apps discovered during a scan (for the loading counter). */
+    private val _scanCount = MutableStateFlow(0)
+    val scanCount: StateFlow<Int> = _scanCount.asStateFlow()
+
+    private val _scanTotal = MutableStateFlow(0)
+    val scanTotal: StateFlow<Int> = _scanTotal.asStateFlow()
+
+    /** True when the last scan failed (shows retry instead of an empty list). */
+    private val _loadError = MutableStateFlow(false)
+    val loadError: StateFlow<Boolean> = _loadError.asStateFlow()
+
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -43,12 +54,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refresh() {
         viewModelScope.launch {
-            _loading.value = true
+            val firstLoad = _apps.value.isEmpty()
+            // Full-screen loader only on first load; later refreshes are silent
+            // (icons stream in lazily per row via IconLoader).
+            if (firstLoad) {
+                _loading.value = true
+            }
+            _loadError.value = false
             try {
-                val list = inventory.load()
-                _apps.value = list
-                store.prune(list.map { it.packageName }.toSet())
+                val names = inventory.loadNames()
+                _scanTotal.value = names.size
+                // Publish progressively so the counter feels alive.
+                val batch = ArrayList<InstalledApp>(names.size)
+                for ((index, app) in names.withIndex()) {
+                    batch.add(app)
+                    if (index % 40 == 39) {
+                        _apps.value = batch.toList()
+                        _scanCount.value = index + 1
+                    }
+                }
+                _apps.value = names
+                _scanCount.value = names.size
+                store.prune(names.map { it.packageName }.toSet())
             } catch (_: Exception) {
+                if (firstLoad) {
+                    _loadError.value = true
+                }
             } finally {
                 _loading.value = false
             }
