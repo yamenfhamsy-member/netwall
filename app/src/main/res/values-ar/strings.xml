@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NetWall</string>
+    <string name="onboarding_title_1">احجب الإنترنت عن كل تطبيق</string>
+    <string name="onboarding_text_1">اختار أي تطبيقات مسموح لها بالواي فاي أو بيانات الهاتف. الباقي بينقطع تلقائياً.</string>
+    <string name="onboarding_title_2">VPN محلي بدون سيرفر</string>
+    <string name="onboarding_text_2">NetWall يستخدم خانة الـ VPN بالجهاز كفلتر داخلي فقط. الترافيك ما بيطلع من تلفونك. بدون حساب وبدون سيرفر خارجي.</string>
+    <string name="onboarding_title_3">خليك محمي دائماً</string>
+    <string name="onboarding_text_3">خلي NetWall شغال واستثنيه من توفير البطارية عشان الحماية تضل بعد إعادة التشغيل.</string>
+    <string name="onboarding_next">التالي</string>
+    <string name="onboarding_grant_vpn">السماح بالـ VPN المحلي</string>
+    <string name="onboarding_battery">إيقاف توفير البطارية</string>
+    <string name="onboarding_start">تفعيل الحماية</string>
+    <string name="search_hint">ابحث عن تطبيق…</string>
+    <string name="filter_all">الكل</string>
+    <string name="filter_blocked">المحجوبة</string>
+    <string name="filter_system">النظام</string>
+    <string name="chip_wifi">واي فاي</string>
+    <string name="chip_data">بيانات</string>
+    <string name="master_on">الحماية مفعّلة</string>
+    <string name="master_off">الحماية متوقفة</string>
+    <string name="whitelist_mode">احجب الكل إلا المسموح</string>
+    <string name="show_system">إظهار تطبيقات النظام</string>
+    <string name="empty_no_results">لا يوجد تطبيق يطابق البحث.</string>
+    <string name="blocked_on_wifi">محجوب عن الواي فاي</string>
+    <string name="blocked_on_data">محجوب عن البيانات</string>
+    <string name="notif_channel">الحماية</string>
+    <string name="notif_title">NetWall يحمي جهازك</string>
+    <string name="notif_text">جدار الحماية لكل تطبيق يعمل الآن</string>
+    <string name="notif_stop">إيقاف</string>
+    <string name="notif_conflict_title">يوجد VPN آخر يعمل</string>
+    <string name="notif_conflict_text">أوقف تطبيق الـ VPN الآخر ثم أعد تفعيل حماية NetWall.</string>
+    <string name="notif_boot_title">اضغط لاستئناف الحماية</string>
+    <string name="notif_boot_text">تعذر التشغيل التلقائي. افتح التطبيق للمتابعة.</string>
+</resources>

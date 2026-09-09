@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NetWall</string>
+    <string name="onboarding_title_1">Block internet per app</string>
+    <string name="onboarding_text_1">Choose which apps can use Wi-Fi or mobile data. The rest are cut off automatically.</string>
+    <string name="onboarding_title_2">Local VPN, no server</string>
+    <string name="onboarding_text_2">NetWall uses Android\'s VPN slot as an on-device filter. Traffic never leaves your phone. There is no account and no remote server.</string>
+    <string name="onboarding_title_3">Stay protected</string>
+    <string name="onboarding_text_3">Keep NetWall running and exclude it from battery optimization so protection survives restarts.</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_grant_vpn">Allow local VPN</string>
+    <string name="onboarding_battery">Disable battery optimization</string>
+    <string name="onboarding_start">Start protection</string>
+    <string name="search_hint">Search apps…</string>
+    <string name="filter_all">All</string>
+    <string name="filter_blocked">Blocked</string>
+    <string name="filter_system">System</string>
+    <string name="chip_wifi">Wi-Fi</string>
+    <string name="chip_data">Data</string>
+    <string name="master_on">Protection on</string>
+    <string name="master_off">Protection off</string>
+    <string name="whitelist_mode">Block all except allowed</string>
+    <string name="show_system">Show system apps</string>
+    <string name="empty_no_results">No apps match your search.</string>
+    <string name="blocked_on_wifi">Blocked on Wi-Fi</string>
+    <string name="blocked_on_data">Blocked on mobile data</string>
+    <string name="notif_channel">Protection</string>
+    <string name="notif_title">NetWall is protecting your device</string>
+    <string name="notif_text">Per-app internet firewall is active</string>
+    <string name="notif_stop">Stop</string>
+    <string name="notif_conflict_title">Another VPN is active</string>
+    <string name="notif_conflict_text">Stop the other VPN app, then re-enable NetWall protection.</string>
+    <string name="notif_boot_title">Tap to resume protection</string>
+    <string name="notif_boot_text">NetWall could not auto-start. Open the app to resume.</string>
+</resources>
