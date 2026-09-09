@@ -51,6 +51,12 @@ class FirewallVpnService : VpnService() {
     @Volatile private var running = false
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var lastRebuild = 0L
+    // Generation counter: incremented on every restart/stop so stale workers
+    // can detect they are obsolete and never resurrect the tunnel.
+    private var generation = 0
+    private var consecutiveFailures = 0
+    private var fatalShutdown = false
+    private var lastAppliedNetType: NetType? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -69,6 +75,10 @@ class FirewallVpnService : VpnService() {
             teardown()
             stopSelf()
             return Service.START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_START) {
+            // Explicit user/system start clears a previous fatal shutdown.
+            fatalShutdown = false
         }
         try {
             startForegroundCompat(buildStatusNotification())
@@ -156,11 +166,25 @@ class FirewallVpnService : VpnService() {
         getSystemService(NotificationManager::class.java)?.notify(CONFLICT_NOTIF_ID, notif)
     }
 
-    private fun postTapToResume() {
-        val notif = NotificationCompat.Builder(this, CHANNEL_ID)
+    private fun postTapToResume() {        val notif = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.notif_boot_title))
             .setContentText(getString(R.string.notif_boot_text))
+            .setContentIntent(mainPendingIntent())
+            .setAutoCancel(true)
+            .build()
+        getSystemService(NotificationManager::class.java)?.notify(CONFLICT_NOTIF_ID, notif)
+    }
+
+    private fun postAutoOff() {
+        try {
+            stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        } catch (_: Exception) {
+        }
+        val notif = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(getString(R.string.notif_autooff_title))
+            .setContentText(getString(R.string.notif_autooff_text))
             .setContentIntent(mainPendingIntent())
             .setAutoCancel(true)
             .build()
@@ -190,15 +214,22 @@ class FirewallVpnService : VpnService() {
         val now = SystemClock.elapsedRealtime()
         if (now - lastRebuild < 2000) return
         lastRebuild = now
+        // Skip capability noise: rebuild only when the transport actually
+        // changed or no tunnel is currently up.
+        if (tunnelAlive() && currentNetType() == lastAppliedNetType) return
         restartTunnel()
     }
+
+    private fun tunnelAlive(): Boolean = synchronized(guard) { tun != null && running }
 
     // ---------- tunnel ----------
 
     private fun restartTunnel() {
         synchronized(guard) {
+            generation++
             stopWorkerLocked()
-            val thread = Thread({ setupAndSink() }, "netwall-tun")
+            val myGen = generation
+            val thread = Thread({ setupAndSink(myGen) }, "netwall-tun")
             thread.isDaemon = true
             worker = thread
             thread.start()
@@ -206,7 +237,11 @@ class FirewallVpnService : VpnService() {
     }
 
     private fun teardown() {
-        synchronized(guard) { stopWorkerLocked() }
+        synchronized(guard) {
+            // Invalidate any in-flight worker so it can never resurrect the tunnel.
+            generation++
+            stopWorkerLocked()
+        }
     }
 
     private fun stopWorkerLocked() {
@@ -239,82 +274,127 @@ class FirewallVpnService : VpnService() {
         }
     }
 
-    private fun setupAndSink() {
-        val store = RulesStore(applicationContext)
-        val snapshot = try {
-            runBlocking { store.current() }
-        } catch (_: Exception) {
-            stopSelf()
-            return
-        }
-        if (!snapshot.masterEnabled) {
-            stopSelf()
-            return
-        }
-
-        val installed = try {
-            runBlocking {
-                AppInventory(applicationContext).load().map { it.packageName }.toSet()
-            }
-        } catch (_: Exception) {
-            emptySet()
-        }
-
-        val netType = currentNetType()
-        val self = packageName
-        // Packages allowed to bypass the VPN (their traffic is untouched).
-        val bypass = HashSet<String>(installed.size + 1)
-        bypass.add(self)
-        if (snapshot.whitelistMode) {
-            // Only fully-unblocked apps are allowed; everything else is sinkholed.
-            val blockedAll = snapshot.wifiBlocked + snapshot.dataBlocked
-            for (pkg in installed) {
-                if (!blockedAll.contains(pkg)) bypass.add(pkg)
-            }
-        } else {
-            val blockedNow = when (netType) {
-                NetType.WIFI -> snapshot.wifiBlocked
-                NetType.CELLULAR -> snapshot.dataBlocked
-                NetType.OFFLINE -> snapshot.wifiBlocked + snapshot.dataBlocked
-            }
-            for (pkg in installed) {
-                if (!blockedNow.contains(pkg)) bypass.add(pkg)
-            }
-        }
-
-        val fd = try {
-            val builder = Builder()
-                .setSession("NetWall")
-                .setMtu(1500)
-                .addAddress("10.8.0.2", 32)
-                .addRoute("0.0.0.0", 0)
-                .addDnsServer("10.8.0.1")
-                .setBlocking(true)
-                .setConfigureIntent(mainPendingIntent())
-            try {
-                builder.addRoute("::", 0)
+    private fun setupAndSink(myGen: Int) {
+        var attempt = 0
+        while (attempt < 3) {
+            if (myGen != generation) return // Superseded or stopped.
+            val store = RulesStore(applicationContext)
+            val snapshot = try {
+                runBlocking { store.current() }
             } catch (_: Exception) {
+                stopSelf()
+                return
             }
-            for (pkg in bypass) {
-                try {
-                    builder.addDisallowedApplication(pkg)
-                } catch (_: PackageManager.NameNotFoundException) {
+            if (!snapshot.masterEnabled || fatalShutdown) {
+                stopSelf()
+                return
+            }
+
+            val installed = try {
+                runBlocking {
+                    AppInventory(applicationContext).load().map { it.packageName }.toSet()
+                }
+            } catch (_: Exception) {
+                emptySet()
+            }
+
+            val netType = currentNetType()
+            val self = packageName
+            // Packages allowed to bypass the VPN (their traffic is untouched).
+            val bypass = HashSet<String>(installed.size + 1)
+            bypass.add(self)
+            if (snapshot.whitelistMode) {
+                // Only fully-unblocked apps are allowed; everything else is sinkholed.
+                val blockedAll = snapshot.wifiBlocked + snapshot.dataBlocked
+                for (pkg in installed) {
+                    if (!blockedAll.contains(pkg)) bypass.add(pkg)
+                }
+            } else {
+                val blockedNow = when (netType) {
+                    NetType.WIFI -> snapshot.wifiBlocked
+                    NetType.CELLULAR -> snapshot.dataBlocked
+                    NetType.OFFLINE -> snapshot.wifiBlocked + snapshot.dataBlocked
+                }
+                for (pkg in installed) {
+                    if (!blockedNow.contains(pkg)) bypass.add(pkg)
                 }
             }
-            builder.establish()
+
+            // Re-check master right before touching the VPN slot: the user may
+            // have switched protection off while we were scanning packages.
+            val fresh = try {
+                runBlocking { store.current() }
+            } catch (_: Exception) {
+                stopSelf()
+                return
+            }
+            if (!fresh.masterEnabled || myGen != generation) return
+
+            val fd = try {
+                val builder = Builder()
+                    .setSession("NetWall")
+                    .setMtu(1500)
+                    .addAddress("10.8.0.2", 32)
+                    .addRoute("0.0.0.0", 0)
+                    .addDnsServer("10.8.0.1")
+                    .setBlocking(true)
+                    .setConfigureIntent(mainPendingIntent())
+                try {
+                    builder.addRoute("::", 0)
+                } catch (_: Exception) {
+                }
+                for (pkg in bypass) {
+                    try {
+                        builder.addDisallowedApplication(pkg)
+                    } catch (_: PackageManager.NameNotFoundException) {
+                    }
+                }
+                builder.establish()
+            } catch (_: Exception) {
+                null
+            }
+
+            if (fd != null) {
+                if (myGen != generation) {
+                    // Became stale while establishing: close the orphan, never loop.
+                    try {
+                        fd.close()
+                    } catch (_: Exception) {
+                    }
+                    return
+                }
+                consecutiveFailures = 0
+                lastAppliedNetType = netType
+                synchronized(guard) { tun = fd }
+                running = true
+                sinkLoop(fd)
+                return
+            }
+
+            // establish() failed (slot taken or permission revoked): back off
+            // instead of hammering the system.
+            attempt++
+            consecutiveFailures++
+            if (attempt >= 3) break
+            try {
+                Thread.sleep(if (attempt == 1) 5_000 else 15_000)
+            } catch (_: InterruptedException) {
+                return
+            }
+        }
+
+        // Fatal: break the restart loop for good — switch master off so
+        // START_STICKY restarts become harmless no-ops, and notify once.
+        try {
+            runBlocking { RulesStore(applicationContext).setMasterEnabled(false) }
         } catch (_: Exception) {
-            null
         }
+        fatalShutdown = true
+        postAutoOff()
+        stopSelf()
+    }
 
-        if (fd == null) {
-            // Not prepared or another VPN owns the slot.
-            postConflict()
-            stopSelf()
-            return
-        }
-
-        synchronized(guard) { tun = fd }
-        running = true
+    private fun sinkLoop(fd: ParcelFileDescriptor) {
         try {
             FileInputStream(fd.fileDescriptor).use { input ->
                 val buffer = ByteArray(32767)

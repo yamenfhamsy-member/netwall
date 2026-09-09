@@ -30,6 +30,8 @@
     <string name="notif_stop">إيقاف</string>
     <string name="notif_conflict_title">يوجد VPN آخر يعمل</string>
     <string name="notif_conflict_text">أوقف تطبيق الـ VPN الآخر ثم أعد تفعيل حماية NetWall.</string>
+    <string name="notif_autooff_title">NetWall أوقف الحماية</string>
+    <string name="notif_autooff_text">تعذر الاحتفاظ بخانة الـ VPN بعد عدة محاولات. اضغط لإعادة الفتح والمحاولة.</string>
     <string name="notif_boot_title">اضغط لاستئناف الحماية</string>
     <string name="notif_boot_text">تعذر التشغيل التلقائي. افتح التطبيق للمتابعة.</string>
 </resources>

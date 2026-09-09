@@ -30,6 +30,8 @@
     <string name="notif_stop">Stop</string>
     <string name="notif_conflict_title">Another VPN is active</string>
     <string name="notif_conflict_text">Stop the other VPN app, then re-enable NetWall protection.</string>
+    <string name="notif_autooff_title">NetWall stopped protection</string>
+    <string name="notif_autooff_text">Could not hold the VPN slot after several tries. Tap to reopen and retry.</string>
     <string name="notif_boot_title">Tap to resume protection</string>
     <string name="notif_boot_text">NetWall could not auto-start. Open the app to resume.</string>
 </resources>

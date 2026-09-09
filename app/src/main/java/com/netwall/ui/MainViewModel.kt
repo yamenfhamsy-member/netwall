@@ -97,6 +97,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun disableProtection() {
+        // Cancel any pending debounced restart first: otherwise a toggle made
+        // just before switching off could resurrect the service afterwards.
+        restartJob?.cancel()
         viewModelScope.launch {
             store.setMasterEnabled(false)
         }
