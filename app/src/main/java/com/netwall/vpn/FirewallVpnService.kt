@@ -253,7 +253,9 @@ class FirewallVpnService : VpnService() {
         }
 
         val installed = try {
-            AppInventory(applicationContext).load().map { it.packageName }.toSet()
+            runBlocking {
+                AppInventory(applicationContext).load().map { it.packageName }.toSet()
+            }
         } catch (_: Exception) {
             emptySet()
         }
