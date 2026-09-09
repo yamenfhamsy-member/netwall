@@ -44,4 +44,10 @@
     <string name="diag_refresh">تحديث</string>
     <string name="diag_share">مشاركة</string>
     <string name="diag_empty">لا توجد أحداث بعد. تظهر الأحداث هنا عند بدء الحماية أو إعادة بنائها أو إيقافها.</string>
+    <string name="power_on">تفعيل</string>
+    <string name="power_off">إيقاف</string>
+    <string name="power_connecting">جارٍ تشغيل الحماية…</string>
+    <string name="status_protected">محمي — %1$d تطبيق محجوب</string>
+    <string name="status_off">الحماية متوقفة</string>
+    <string name="status_failed">تعذر التشغيل</string>
 </resources>

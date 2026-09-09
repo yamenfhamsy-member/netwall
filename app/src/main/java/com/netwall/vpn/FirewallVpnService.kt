@@ -18,7 +18,11 @@ import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.netwall.R
 import com.netwall.data.RulesStore
+import com.netwall.data.VpnState
 import com.netwall.ui.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -72,6 +76,7 @@ class FirewallVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             EventLog.log("STOP", "user/system stop")
+            setStateAsync(VpnState.IDLE)
             teardown()
             stopSelf()
             return Service.START_NOT_STICKY
@@ -97,6 +102,7 @@ class FirewallVpnService : VpnService() {
 
     override fun onRevoke() {
         EventLog.log("REVOKE", "slot taken by another VPN")
+        setStateAsync(VpnState.FAILED)
         teardown()
         stopSelf()
         super.onRevoke()
@@ -225,6 +231,27 @@ class FirewallVpnService : VpnService() {
 
     private fun tunnelAlive(): Boolean = synchronized(guard) { tun != null && running }
 
+    /** Blocking write, for worker threads only. */
+    private fun setState(state: VpnState) {
+        try {
+            runBlocking { RulesStore(applicationContext).setVpnState(state) }
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Fire-and-forget write, safe from the main thread. */
+    private fun setStateAsync(state: VpnState) {
+        try {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    RulesStore(applicationContext).setVpnState(state)
+                } catch (_: Exception) {
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     // ---------- tunnel ----------
 
     private fun restartTunnel() {
@@ -292,6 +319,8 @@ class FirewallVpnService : VpnService() {
                 stopSelf()
                 return
             }
+            setState(VpnState.CONNECTING)
+            EventLog.log("CONNECTING", "resolving rules")
 
             val installed = PackageCache.packages.ifEmpty {
                 // First run after boot/install: names-only scan (fast, no icons).
@@ -366,6 +395,7 @@ class FirewallVpnService : VpnService() {
                 }
                 consecutiveFailures = 0
                 lastAppliedNetType = netType
+                setState(VpnState.CONNECTED)
                 EventLog.log("ESTABLISH", "ok net=$netType bypass=${bypass.size}")
                 synchronized(guard) { tun = fd }
                 running = true
@@ -393,6 +423,7 @@ class FirewallVpnService : VpnService() {
         } catch (_: Exception) {
         }
         fatalShutdown = true
+        setState(VpnState.FAILED)
         EventLog.log("AUTOOFF", "master disabled after 3 failures")
         postAutoOff()
         stopSelf()

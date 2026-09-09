@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.netwall.data.AppInventory
 import com.netwall.data.InstalledApp
 import com.netwall.data.RulesStore
+import com.netwall.data.VpnState
 import com.netwall.vpn.FirewallController
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -49,6 +50,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var restartJob: Job? = null
 
     init {
+        // Clear a stale CONNECTING left behind by a killed process.
+        viewModelScope.launch {
+            try {
+                if (store.current().vpnState == VpnState.CONNECTING) {
+                    store.setVpnState(VpnState.IDLE)
+                }
+            } catch (_: Exception) {
+            }
+        }
         refresh()
     }
 
@@ -96,6 +106,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleWifi(packageName: String, blocked: Boolean) {
         viewModelScope.launch {
+            if (isConnecting()) return@launch
             store.setWifiBlocked(packageName, blocked)
             restartDebounced()
         }
@@ -103,6 +114,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleData(packageName: String, blocked: Boolean) {
         viewModelScope.launch {
+            if (isConnecting()) return@launch
             store.setDataBlocked(packageName, blocked)
             restartDebounced()
         }
@@ -110,6 +122,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setWhitelistMode(enabled: Boolean) {
         viewModelScope.launch {
+            if (isConnecting()) return@launch
             store.setWhitelistMode(enabled)
             restartDebounced()
         }
@@ -141,6 +154,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { store.setOnboardingDone(true) }
     }
 
+    /** Retry after FAILED: same path as enabling (clears fatal shutdown). */
+    fun retryConnection() {
+        enableProtection()
+    }
+
+    private suspend fun isConnecting(): Boolean {
+        return try {
+            store.current().vpnState == VpnState.CONNECTING
+        } catch (_: Exception) {
+            false
+        }
+    }
     private fun restartDebounced() {
         restartJob?.cancel()
         restartJob = viewModelScope.launch {

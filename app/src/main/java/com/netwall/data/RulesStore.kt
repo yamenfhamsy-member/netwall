@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -12,6 +13,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.rulesDataStore: DataStore<Preferences> by preferencesDataStore(name = "rules")
+
+/**
+ * Live VPN tunnel state, written by the service and observed by the UI.
+ * IDLE = off · CONNECTING = establishing · CONNECTED = up · FAILED = gave up.
+ */
+enum class VpnState { IDLE, CONNECTING, CONNECTED, FAILED }
 
 /**
  * Stores per-app firewall rules and global settings.
@@ -26,6 +33,7 @@ class RulesStore(private val context: Context) {
         val WHITELIST_MODE = booleanPreferencesKey("whitelist_mode")
         val SHOW_SYSTEM = booleanPreferencesKey("show_system")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+        val VPN_STATE = stringPreferencesKey("vpn_state")
     }
 
     data class Snapshot(
@@ -35,6 +43,7 @@ class RulesStore(private val context: Context) {
         val whitelistMode: Boolean = false,
         val showSystem: Boolean = false,
         val onboardingDone: Boolean = false,
+        val vpnState: VpnState = VpnState.IDLE,
     )
 
     val snapshot: Flow<Snapshot> = context.rulesDataStore.data.map { p ->
@@ -45,6 +54,9 @@ class RulesStore(private val context: Context) {
             whitelistMode = p[Keys.WHITELIST_MODE] ?: false,
             showSystem = p[Keys.SHOW_SYSTEM] ?: false,
             onboardingDone = p[Keys.ONBOARDING_DONE] ?: false,
+            vpnState = runCatching {
+                VpnState.valueOf(p[Keys.VPN_STATE] ?: VpnState.IDLE.name)
+            }.getOrDefault(VpnState.IDLE),
         )
     }
 
@@ -80,6 +92,10 @@ class RulesStore(private val context: Context) {
 
     suspend fun setOnboardingDone(done: Boolean) {
         context.rulesDataStore.edit { it[Keys.ONBOARDING_DONE] = done }
+    }
+
+    suspend fun setVpnState(state: VpnState) {
+        context.rulesDataStore.edit { it[Keys.VPN_STATE] = state.name }
     }
 
     /** Removes rules for packages that are no longer installed. */

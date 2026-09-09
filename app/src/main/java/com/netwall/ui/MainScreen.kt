@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.netwall.R
 import com.netwall.data.InstalledApp
 import com.netwall.data.RulesStore
+import com.netwall.data.VpnState
 import com.netwall.vpn.FirewallController
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,25 +114,6 @@ fun MainScreen(viewModel: MainViewModel) {
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
-                actions = {
-                    Text(
-                        text = if (snapshot.masterEnabled) {
-                            stringResource(R.string.master_on)
-                        } else {
-                            stringResource(R.string.master_off)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Switch(
-                        checked = snapshot.masterEnabled,
-                        onCheckedChange = { on ->
-                            if (on) requestEnable() else viewModel.disableProtection()
-                        },
-                    )
-                    Spacer(Modifier.width(8.dp))
-                },
             )
         },
     ) { padding ->
@@ -150,6 +133,27 @@ fun MainScreen(viewModel: MainViewModel) {
                     if (loading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
+                    val frozen = snapshot.vpnState == VpnState.CONNECTING
+                    val blockedCount = remember(snapshot) {
+                        (snapshot.wifiBlocked + snapshot.dataBlocked).size
+                    }
+                    PowerButton(
+                        state = snapshot.vpnState,
+                        blockedCount = blockedCount,
+                        onEnable = { requestEnable() },
+                        onDisable = { viewModel.disableProtection() },
+                        onRetry = {
+                            val intent = FirewallController.prepareIntent(context)
+                            if (intent == null) {
+                                viewModel.retryConnection()
+                            } else {
+                                try {
+                                    vpnLauncher.launch(intent)
+                                } catch (_: Exception) {
+                                }
+                            }
+                        },
+                    )
                     OutlinedTextField(
                         value = query,
                         onValueChange = viewModel::setQuery,
@@ -164,24 +168,28 @@ fun MainScreen(viewModel: MainViewModel) {
                             selected = filter == AppFilter.ALL,
                             onClick = { viewModel.setFilter(AppFilter.ALL) },
                             label = { Text(stringResource(R.string.filter_all)) },
+                            enabled = !frozen,
                         )
                         Spacer(Modifier.width(8.dp))
                         FilterChip(
                             selected = filter == AppFilter.BLOCKED,
                             onClick = { viewModel.setFilter(AppFilter.BLOCKED) },
                             label = { Text(stringResource(R.string.filter_blocked)) },
+                            enabled = !frozen,
                         )
                         Spacer(Modifier.width(8.dp))
                         FilterChip(
                             selected = filter == AppFilter.SYSTEM,
                             onClick = { viewModel.setFilter(AppFilter.SYSTEM) },
                             label = { Text(stringResource(R.string.filter_system)) },
+                            enabled = !frozen,
                         )
                     }
                     SettingsRow(
                         label = stringResource(R.string.whitelist_mode),
                         checked = snapshot.whitelistMode,
                         onCheckedChange = viewModel::setWhitelistMode,
+                        enabled = !frozen,
                     )
                     SettingsRow(
                         label = stringResource(R.string.show_system),
@@ -214,6 +222,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     app = app,
                                     wifiBlocked = snapshot.wifiBlocked.contains(app.packageName),
                                     dataBlocked = snapshot.dataBlocked.contains(app.packageName),
+                                    controlsEnabled = !frozen,
                                     onWifiChange = { viewModel.toggleWifi(app.packageName, it) },
                                     onDataChange = { viewModel.toggleData(app.packageName, it) },
                                 )
@@ -276,7 +285,12 @@ private fun ErrorView(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun SettingsRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun SettingsRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -288,7 +302,86 @@ private fun SettingsRow(label: String, checked: Boolean, onCheckedChange: (Boole
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+    }
+}
+
+/** Big circular power button: the single entry point for protection on/off. */
+@Composable
+private fun PowerButton(
+    state: VpnState,
+    blockedCount: Int,
+    onEnable: () -> Unit,
+    onDisable: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val connected = state == VpnState.CONNECTED
+    val connecting = state == VpnState.CONNECTING
+    val failed = state == VpnState.FAILED
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(148.dp),
+        ) {
+            if (connecting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.fillMaxSize(),
+                    strokeWidth = 6.dp,
+                )
+            }
+            Button(
+                onClick = {
+                    when {
+                        connected -> onDisable()
+                        failed -> onRetry()
+                        else -> onEnable()
+                    }
+                },
+                enabled = !connecting,
+                shape = CircleShape,
+                modifier = Modifier.size(116.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (connected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    contentColor = if (connected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            ) {
+                Text(
+                    text = when {
+                        connecting -> "…"
+                        connected -> stringResource(R.string.power_off)
+                        failed -> stringResource(R.string.loading_retry)
+                        else -> stringResource(R.string.power_on)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = when {
+                connecting -> stringResource(R.string.power_connecting)
+                connected -> stringResource(R.string.status_protected, blockedCount)
+                failed -> stringResource(R.string.status_failed)
+                else -> stringResource(R.string.status_off)
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -333,6 +426,7 @@ private fun AppRow(
     app: InstalledApp,
     wifiBlocked: Boolean,
     dataBlocked: Boolean,
+    controlsEnabled: Boolean,
     onWifiChange: (Boolean) -> Unit,
     onDataChange: (Boolean) -> Unit,
 ) {
@@ -376,12 +470,14 @@ private fun AppRow(
                 selected = wifiBlocked,
                 onClick = { onWifiChange(!wifiBlocked) },
                 label = { Text(stringResource(R.string.chip_wifi)) },
+                enabled = controlsEnabled,
             )
             Spacer(Modifier.width(6.dp))
             FilterChip(
                 selected = dataBlocked,
                 onClick = { onDataChange(!dataBlocked) },
                 label = { Text(stringResource(R.string.chip_data)) },
+                enabled = controlsEnabled,
             )
         }
         HorizontalDivider(

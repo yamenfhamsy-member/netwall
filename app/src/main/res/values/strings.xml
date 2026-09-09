@@ -44,4 +44,10 @@
     <string name="diag_refresh">Refresh</string>
     <string name="diag_share">Share</string>
     <string name="diag_empty">No events yet. Events appear here when protection starts, rebuilds, or stops.</string>
+    <string name="power_on">Turn on</string>
+    <string name="power_off">Turn off</string>
+    <string name="power_connecting">Starting protection…</string>
+    <string name="status_protected">Protected — %1$d apps blocked</string>
+    <string name="status_off">Protection is off</string>
+    <string name="status_failed">Could not start</string>
 </resources>
